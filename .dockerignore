@@ -1,0 +1,7 @@
+# Keep the build context to only what the Dockerfile actually COPYs.
+*
+
+!go.mod
+!main.go
+!static
+!static/index.html
