@@ -24,6 +24,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Verify Docker login
+        run: |
+          echo "Logged in as:"
+          docker info
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
