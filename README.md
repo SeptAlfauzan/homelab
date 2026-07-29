@@ -1,8 +1,10 @@
-# armbian-stats-web
+# homelab
 
 Self-contained web dashboard for Armbian / Linux SBCs. Dark instrument-panel style, live-updating stats, zero dependencies.
 
 ![screenshot](https://img.shields.io/badge/status-active-brightgreen)
+
+![dashboard](static/screenshot.png)
 
 ## Features
 
