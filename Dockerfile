@@ -22,21 +22,20 @@ FROM golang:1.26.5-alpine AS build
 
 WORKDIR /src
 
-COPY go.mod ./
-COPY main.go ./
-COPY static ./static
+COPY . .
 
-# TARGETOS/TARGETARCH/TARGETVARIANT are set automatically by
-# `podman build --platform ...` / `podman buildx build --platform ...`.
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
-ARG TARGETVARIANT=
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 RUN set -eux; \
-    export CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH"; \
-    if [ "$TARGETARCH" = "arm" ] && [ -n "$TARGETVARIANT" ]; then \
+    export CGO_ENABLED=0; \
+    export GOOS="${TARGETOS:-linux}"; \
+    export GOARCH="${TARGETARCH:-$(go env GOARCH)}"; \
+    if [ "$GOARCH" = "arm" ] && [ -n "$TARGETVARIANT" ]; then \
         export GOARM="${TARGETVARIANT#v}"; \
     fi; \
+    echo "Building for $GOOS/$GOARCH"; \
     go build -trimpath -ldflags="-s -w" -o /out/homelab .
 
 # ---- Runtime stage -------------------------------------------------------
