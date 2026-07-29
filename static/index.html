@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Armbian Telemetry</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%230c1210'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%236fb8b0'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --ink:#0c1210;
+    --panel:#121815;
+    --panel-2:#171f1a;
+    --line:#26332c;
+    --line-soft:#1a231e;
+    --teal:#6fb8b0;
+    --amber:#e8a33d;
+    --red:#e5484d;
+    --text:#e7e5e0;
+    --text-dim:#8a9490;
+    --text-faint:#4c5650;
+    --mono:ui-monospace,"SFMono-Regular","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size:28px 28px;
+    background-position:-1px -1px;
+    position:relative;
+  }
+  *:focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
+
+  .scanlines{
+    position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(to bottom, rgba(255,255,255,.015) 0px, rgba(255,255,255,.015) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode:overlay;opacity:.5;
+  }
+
+  .faceplate{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 20px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom, var(--panel), transparent);
+    flex-wrap:wrap;gap:8px;
+  }
+  .brand{font-family:var(--mono);letter-spacing:.12em;font-size:13px;color:var(--text-dim);text-transform:uppercase;}
+  .brand-accent{color:var(--teal);}
+  .rev{font-family:var(--mono);font-size:11px;color:var(--text-faint);margin-left:10px;}
+  .faceplate-right{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--text-dim);}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint);display:inline-block;}
+  .live-dot.on{background:var(--teal);box-shadow:0 0 6px var(--teal);animation:pulse 2s ease-in-out infinite;}
+  .live-dot.err{background:var(--red);box-shadow:0 0 6px var(--red);animation:none;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .clock{color:var(--text);min-width:74px;text-align:right;}
+
+  .idplate{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line);}
+  .id-item{flex:1 1 140px;padding:10px 18px;border-right:1px solid var(--line-soft);display:flex;flex-direction:column;gap:3px;min-width:0;}
+  .id-item:last-child{border-right:none;}
+  .id-label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--text-faint);text-transform:uppercase;}
+  .id-value{font-family:var(--mono);font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:16px;padding:20px;}
+  .panel-wide{grid-column:1 / -1;}
+
+  .panel{position:relative;background:var(--panel);border:1px solid var(--line);padding:16px 18px 18px;}
+  .panel-corner{position:absolute;width:10px;height:10px;border-color:var(--teal);opacity:.55;}
+  .panel-corner.tl{top:-1px;left:-1px;border-top:1px solid;border-left:1px solid;}
+  .panel-corner.tr{top:-1px;right:-1px;border-top:1px solid;border-right:1px solid;}
+  .panel-corner.bl{bottom:-1px;left:-1px;border-bottom:1px solid;border-left:1px solid;}
+  .panel-corner.br{bottom:-1px;right:-1px;border-bottom:1px solid;border-right:1px solid;}
+
+  .panel-head{display:flex;align-items:baseline;gap:8px;margin-bottom:12px;}
+  .chan{font-family:var(--mono);font-size:10px;color:var(--text-faint);letter-spacing:.1em;}
+  .panel-title{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;}
+
+  .reading{display:flex;align-items:baseline;gap:4px;font-family:var(--mono);}
+  .reading-value{font-size:40px;font-weight:600;color:var(--teal);font-variant-numeric:tabular-nums;line-height:1;transition:color .2s ease;}
+  .reading-value.warn{color:var(--amber);}
+  .reading-value.crit{color:var(--red);}
+  .reading-unit{font-size:16px;color:var(--text-dim);}
+
+  .trace{width:100%;height:60px;margin-top:10px;display:block;border-bottom:1px solid var(--line-soft);}
+  .trace polyline{fill:none;stroke:var(--teal);stroke-width:1.5;}
+
+  .sub-readout{font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-top:6px;}
+
+  .cores{display:flex;gap:4px;margin-top:14px;flex-wrap:wrap;}
+  .core{flex:1 1 auto;min-width:18px;text-align:center;}
+  .core-bar{height:34px;background:var(--panel-2);border:1px solid var(--line-soft);position:relative;overflow:hidden;}
+  .core-bar i{position:absolute;left:0;right:0;bottom:0;background:var(--teal);display:block;}
+  .core-label{font-family:var(--mono);font-size:9px;color:var(--text-faint);margin-top:3px;}
+
+  .bar-track{height:8px;background:var(--panel-2);border:1px solid var(--line-soft);margin-top:8px;}
+  .bar-fill{height:100%;background:var(--teal);width:0%;transition:width .3s ease, background .2s ease;}
+
+  .temp-row,.net-row{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:12px;padding:6px 0;border-bottom:1px solid var(--line-soft);}
+  .temp-row:last-child,.net-row:last-child{border-bottom:none;}
+  .temp-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;}
+
+  table.docker-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;}
+  table.docker-table th{text-align:left;color:var(--text-faint);font-weight:400;letter-spacing:.08em;padding:4px 8px 8px 0;border-bottom:1px solid var(--line);}
+  table.docker-table td{padding:6px 8px 6px 0;border-bottom:1px solid var(--line-soft);color:var(--text);}
+  table.docker-table tr:last-child td{border-bottom:none;}
+
+  .empty-state{font-family:var(--mono);font-size:12px;color:var(--text-faint);padding:6px 0;}
+
+  .footer{text-align:center;padding:16px;font-family:var(--mono);font-size:10px;color:var(--text-faint);letter-spacing:.08em;}
+
+  @media (max-width:480px){
+    .reading-value{font-size:32px;}
+    .grid{padding:12px;gap:12px;}
+    .id-item{padding:8px 12px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .live-dot.on{animation:none;}
+    .scanlines{display:none;}
+    .bar-fill{transition:none;}
+  }
+</style>
+</head>
+<body>
+<div class="scanlines" aria-hidden="true"></div>
+
+<header class="faceplate">
+  <div>
+    <span class="brand">ARMBIAN <span class="brand-accent">TELEMETRY</span></span>
+    <span class="rev">rev 1</span>
+  </div>
+  <div class="faceplate-right">
+    <span class="live-dot" id="live-dot"></span>
+    <span id="live-label">CONNECTING</span>
+    <span class="clock" id="clock">--:--:--</span>
+  </div>
+</header>
+
+<section class="idplate">
+  <div class="id-item"><span class="id-label">Host</span><span class="id-value" id="v-host">—</span></div>
+  <div class="id-item"><span class="id-label">Board</span><span class="id-value" id="v-board">—</span></div>
+  <div class="id-item"><span class="id-label">OS</span><span class="id-value" id="v-os">—</span></div>
+  <div class="id-item"><span class="id-label">Kernel</span><span class="id-value" id="v-kernel">—</span></div>
+  <div class="id-item"><span class="id-label">Uptime</span><span class="id-value" id="v-uptime">—</span></div>
+  <div class="id-item"><span class="id-label">Load Avg</span><span class="id-value" id="v-load">—</span></div>
+</section>
+
+<main class="grid">
+
+  <section class="panel panel-wide" data-channel="01">
+    <div class="panel-corner tl"></div><div class="panel-corner tr"></div>
+    <div class="panel-corner bl"></div><div class="panel-corner br"></div>
+    <header class="panel-head"><span class="chan">CH.01</span><span class="panel-title">CPU Load</span></header>
+    <div class="reading"><span class="reading-value" id="v-cpu-pct">--</span><span class="reading-unit">%</span></div>
+    <svg class="trace" id="trace-cpu" viewBox="0 0 300 60" preserveAspectRatio="none"></svg>
+    <div class="cores" id="cores"></div>
+  </section>
+
+  <section class="panel" data-channel="02">
+    <div class="panel-corner tl"></div><div class="panel-corner tr"></div>
+    <div class="panel-corner bl"></div><div class="panel-corner br"></div>
+    <header class="panel-head"><span class="chan">CH.02</span><span class="panel-title">Temperature</span></header>
+    <div id="temps"><div class="empty-state">—</div></div>
+  </section>
+
+  <section class="panel panel-wide" data-channel="03">
+    <div class="panel-corner tl"></div><div class="panel-corner tr"></div>
+    <div class="panel-corner bl"></div><div class="panel-corner br"></div>
+    <header class="panel-head"><span class="chan">CH.03</span><span class="panel-title">Memory</span></header>
+    <div class="reading"><span class="reading-value" id="v-mem-pct">--</span><span class="reading-unit">%</span></div>
+    <svg class="trace" id="trace-mem" viewBox="0 0 300 60" preserveAspectRatio="none"></svg>
+    <div class="sub-readout" id="v-mem-sub">— / —</div>
+    <div id="swap-row" style="margin-top:14px;">
+      <div class="id-label" style="margin-bottom:4px;">Swap</div>
+      <div class="bar-track"><div class="bar-fill" id="swap-fill"></div></div>
+      <div class="sub-readout" id="v-swap-sub">— / —</div>
+    </div>
+  </section>
+
+  <section class="panel" data-channel="04">
+    <div class="panel-corner tl"></div><div class="panel-corner tr"></div>
+    <div class="panel-corner bl"></div><div class="panel-corner br"></div>
+    <header class="panel-head"><span class="chan">CH.04</span><span class="panel-title">Disk /</span></header>
+    <div class="bar-track"><div class="bar-fill" id="disk-fill"></div></div>
+    <div class="sub-readout" id="v-disk-sub">—</div>
+  </section>
+
+  <section class="panel" data-channel="05">
+    <div class="panel-corner tl"></div><div class="panel-corner tr"></div>
+    <div class="panel-corner bl"></div><div class="panel-corner br"></div>
+    <header class="panel-head"><span class="chan">CH.05</span><span class="panel-title">Network</span></header>
+    <div id="network"><div class="empty-state">—</div></div>
+  </section>
+
+  <section class="panel panel-wide" data-channel="06">
+    <div class="panel-corner tl"></div><div class="panel-corner tr"></div>
+    <div class="panel-corner bl"></div><div class="panel-corner br"></div>
+    <header class="panel-head"><span class="chan">CH.06</span><span class="panel-title">Containers</span></header>
+    <div id="docker"><div class="empty-state">—</div></div>
+  </section>
+
+</main>
+
+<footer class="footer">armbian-stats-web · polling every {{.IntervalMs}}ms</footer>
+
+<script>
+(function(){
+  "use strict";
+  var POLL_MS = {{.IntervalMs}};
+  var $ = function(id){ return document.getElementById(id); };
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(m){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m];
+    });
+  }
+
+  function fmtBytesKB(kb){
+    var b = kb * 1024, units = ["B","KB","MB","GB","TB"], i = 0;
+    while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+    return b.toFixed(1) + " " + units[i];
+  }
+
+  function fmtUptime(sec){
+    sec = Math.floor(sec || 0);
+    var d = Math.floor(sec / 86400); sec %= 86400;
+    var h = Math.floor(sec / 3600); sec %= 3600;
+    var m = Math.floor(sec / 60);
+    if (d > 0) return d + "d " + h + "h " + m + "m";
+    if (h > 0) return h + "h " + m + "m";
+    return m + "m";
+  }
+
+  function levelClass(pct, warnAt, critAt){
+    warnAt = warnAt === undefined ? 60 : warnAt;
+    critAt = critAt === undefined ? 85 : critAt;
+    if (pct >= critAt) return "crit";
+    if (pct >= warnAt) return "warn";
+    return "";
+  }
+
+  function levelColor(pct, warnAt, critAt){
+    var cls = levelClass(pct, warnAt, critAt);
+    if (cls === "crit") return "var(--red)";
+    if (cls === "warn") return "var(--amber)";
+    return "var(--teal)";
+  }
+
+  function renderTrace(svg, values){
+    if (!values || values.length < 2) { svg.innerHTML = ""; return; }
+    var w = 300, h = 60, pad = 4;
+    var max = 100;
+    for (var i = 0; i < values.length; i++) { if (values[i] > max) max = values[i]; }
+    var step = w / (values.length - 1);
+    var pts = [];
+    for (var j = 0; j < values.length; j++) {
+      var x = (j * step).toFixed(1);
+      var y = (h - pad - (values[j] / max) * (h - pad * 2)).toFixed(1);
+      pts.push(x + "," + y);
+    }
+    svg.innerHTML = '<polyline points="' + pts.join(" ") + '" />';
+  }
+
+  function renderCores(container, cores){
+    if (!cores || !cores.length) { container.innerHTML = ""; return; }
+    var html = "";
+    for (var i = 0; i < cores.length; i++) {
+      var pct = cores[i];
+      var color = levelColor(pct);
+      html += '<div class="core">' +
+                '<div class="core-bar"><i style="height:' + Math.max(2, pct) + '%;background:' + color + ';"></i></div>' +
+                '<div class="core-label">C' + i + '</div>' +
+              '</div>';
+    }
+    container.innerHTML = html;
+  }
+
+  function renderTemps(container, temps){
+    if (!temps || !temps.length) { container.innerHTML = '<div class="empty-state">NO THERMAL ZONES FOUND</div>'; return; }
+    var html = "";
+    for (var i = 0; i < temps.length; i++) {
+      var t = temps[i];
+      var color = levelColor(t.celsius, 55, 70);
+      html += '<div class="temp-row"><span><span class="temp-dot" style="background:' + color + '"></span>' +
+              escapeHtml(t.name) + '</span><span>' + t.celsius.toFixed(1) + '&deg;C</span></div>';
+    }
+    container.innerHTML = html;
+  }
+
+  function renderNetwork(container, list){
+    if (!list || !list.length) { container.innerHTML = '<div class="empty-state">NO ACTIVE INTERFACES</div>'; return; }
+    var html = "";
+    for (var i = 0; i < list.length; i++) {
+      html += '<div class="net-row"><span>' + escapeHtml(list[i].iface) + '</span><span>' + escapeHtml(list[i].ip) + '</span></div>';
+    }
+    container.innerHTML = html;
+  }
+
+  function renderDocker(container, docker){
+    if (!docker || !docker.available) {
+      container.innerHTML = '<div class="empty-state">' + escapeHtml((docker && docker.error) || "DOCKER NOT AVAILABLE") + '</div>';
+      return;
+    }
+    if (!docker.containers || !docker.containers.length) {
+      container.innerHTML = '<div class="empty-state">NO CONTAINERS RUNNING</div>';
+      return;
+    }
+    var rows = "";
+    for (var i = 0; i < docker.containers.length; i++) {
+      var c = docker.containers[i];
+      rows += "<tr><td>" + escapeHtml(c.name) + "</td><td>" + escapeHtml(c.image) + "</td><td>" +
+              escapeHtml(c.status) + "</td><td>" + escapeHtml(c.ports || "\u2014") + "</td></tr>";
+    }
+    container.innerHTML = '<table class="docker-table"><thead><tr><th>Name</th><th>Image</th><th>Status</th><th>Ports</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  var failCount = 0;
+
+  function poll(){
+    fetch("/api/stats", { cache: "no-store" })
+      .then(function(res){ if (!res.ok) throw new Error("bad status"); return res.json(); })
+      .then(function(d){
+        failCount = 0;
+        $("live-dot").className = "live-dot on";
+        $("live-label").textContent = "LIVE";
+
+        $("v-host").textContent = d.hostname || "\u2014";
+        $("v-board").textContent = d.board || "\u2014";
+        $("v-os").textContent = d.os || "\u2014";
+        $("v-kernel").textContent = d.kernel || "\u2014";
+        $("v-uptime").textContent = fmtUptime(d.uptime_seconds);
+        $("v-load").textContent = d.load1.toFixed(2) + " " + d.load5.toFixed(2) + " " + d.load15.toFixed(2);
+
+        var cpuEl = $("v-cpu-pct");
+        cpuEl.textContent = d.cpu.overall_pct.toFixed(1);
+        cpuEl.className = "reading-value " + levelClass(d.cpu.overall_pct);
+        renderTrace($("trace-cpu"), d.cpu_history);
+        renderCores($("cores"), d.cpu.cores);
+
+        renderTemps($("temps"), d.temps);
+
+        var memEl = $("v-mem-pct");
+        memEl.textContent = d.memory.pct.toFixed(1);
+        memEl.className = "reading-value " + levelClass(d.memory.pct);
+        renderTrace($("trace-mem"), d.mem_history);
+        $("v-mem-sub").textContent = fmtBytesKB(d.memory.used_kb) + " / " + fmtBytesKB(d.memory.total_kb);
+
+        if (d.swap.enabled) {
+          $("swap-row").style.display = "";
+          $("swap-fill").style.width = d.swap.pct.toFixed(1) + "%";
+          $("swap-fill").style.background = levelColor(d.swap.pct);
+          $("v-swap-sub").textContent = fmtBytesKB(d.swap.used_kb) + " / " + fmtBytesKB(d.swap.total_kb);
+        } else {
+          $("swap-row").style.display = "none";
+        }
+
+        $("disk-fill").style.width = d.disk.pct.toFixed(1) + "%";
+        $("disk-fill").style.background = levelColor(d.disk.pct, 75, 90);
+        $("v-disk-sub").textContent = d.disk.path + " \u00b7 " + fmtBytesKB(d.disk.used_kb) + " / " + fmtBytesKB(d.disk.total_kb) + " (" + d.disk.pct.toFixed(1) + "%)";
+
+        renderNetwork($("network"), d.network);
+        renderDocker($("docker"), d.docker);
+      })
+      .catch(function(){
+        failCount++;
+        $("live-dot").className = "live-dot err";
+        $("live-label").textContent = failCount > 2 ? "OFFLINE" : "RETRY";
+      });
+  }
+
+  function tickClock(){
+    $("clock").textContent = new Date().toLocaleTimeString("en-GB", { hour12: false });
+  }
+
+  tickClock();
+  setInterval(tickClock, 1000);
+  poll();
+  setInterval(poll, POLL_MS);
+})();
+</script>
+</body>
+</html>
