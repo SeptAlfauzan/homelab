@@ -37,7 +37,7 @@ RUN set -eux; \
     if [ "$TARGETARCH" = "arm" ] && [ -n "$TARGETVARIANT" ]; then \
         export GOARM="${TARGETVARIANT#v}"; \
     fi; \
-    go build -trimpath -ldflags="-s -w" -o /out/armbian-stats-web .
+    go build -trimpath -ldflags="-s -w" -o /out/homelab .
 
 # ---- Runtime stage -------------------------------------------------------
 FROM alpine:3.20
@@ -48,13 +48,13 @@ FROM alpine:3.20
 RUN apk add --no-cache docker-cli ca-certificates tzdata \
     && addgroup -S app && adduser -S -G app app
 
-COPY --from=build /out/armbian-stats-web /usr/local/bin/armbian-stats-web
+COPY --from=build /out/homelab /usr/local/bin/homelab
 
 USER app
-EXPOSE 8080
+EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q -O /dev/null http://127.0.0.1:8080/api/stats || exit 1
+    CMD wget -q -O /dev/null http://127.0.0.1:5000/api/stats || exit 1
 
-ENTRYPOINT ["/usr/local/bin/armbian-stats-web"]
-CMD ["-addr", ":8080"]
+ENTRYPOINT ["/usr/local/bin/homelab"]
+CMD ["-addr", ":5000"]
