@@ -1,3 +1,3 @@
-module https://github.com/SeptAlfauzan/homelab
+module github.com/SeptAlfauzan/homelab
 
 go 1.26.5
